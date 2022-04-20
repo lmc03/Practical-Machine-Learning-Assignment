@@ -1,0 +1,88 @@
+---
+title: "Coursera Practical Machine Learning Assignment"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Task
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Data Pre-Processing and Cleaning
+First, load the necessary libraries and datasets to be used for the analysis.
+```{r, results=FALSE, echo=TRUE}
+library(ggplot2)
+library(caret)
+library(rpart.plot)
+library(rpart)
+library(randomForest)
+
+set.seed(10)
+training <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+head(testing)
+```
+
+The dataset was split into training and testing partitions. 60% of the data was used for the training partition while 40% was used for the testing partition.
+```{r, echo=TRUE}
+partition <- createDataPartition(y = training$classe, p = 0.6, list = FALSE)
+training_partition <- training[partition,]
+testing_partition <- training[-partition,]
+dim(training_partition) #60% of the data is in the training_partition
+dim(testing_partition) #40% of the data is in the testing_partition
+```
+
+After splitting the data into training and testing partitions, it is now important to clean the datasets. This was done by removing the near zero variance columns, columns with NA data comprising more than 80%, and columns which are just timestamps or identifiers. This is a neccessary step in order to ensure that the models will not be fed useless data. The number of columns decreased from 160 to 54 after the pre-processing steps were implemented.
+```{r, echo=TRUE}
+nearlyZero <- nearZeroVar(training_partition)
+filtered_training_partition <- training_partition[, -nearlyZero]
+filtered_testing_partition  <- testing_partition[, -nearlyZero]
+
+filtered_training_partition <- filtered_training_partition[, colMeans(is.na(filtered_training_partition)) <= .80]
+filtered_testing_partition <- filtered_testing_partition[, colMeans(is.na(filtered_testing_partition)) <= .80]
+
+filtered_training_partition <- filtered_training_partition[, -(1:5)]
+dim(filtered_training_partition)
+filtered_testing_partition <- filtered_testing_partition[, -(1:5)]
+dim(filtered_testing_partition)
+```
+
+## Machine Learning Algorithms
+### Decision Tree
+The first machine learning algorithm that was implemented was the decision tree. This was done by using the rpart() function then plotting the result. After the prediction, a confusion matrix was outputted.
+```{r, echo=TRUE}
+decisiontree <- rpart(classe~., data=filtered_training_partition, method='class')
+rpart.plot(decisiontree)
+predict_decision_tree <- predict(decisiontree, testing_partition, type = "class")
+confusionMatrix(predict_decision_tree, as.factor(testing_partition$classe))
+```
+
+### Random Forest
+The next model implemented was the random forest algorithm. It will be used to compare with the performance of the decision tree algorithm.
+```{r, echo=TRUE}
+filtered_training_partition$classe = factor(filtered_training_partition$classe) 
+randomforest <- randomForest(classe ~. , data=filtered_training_partition)
+predict_random_forest <- predict(randomforest, testing_partition)
+confusionMatrix(predict_random_forest, as.factor(testing_partition$classe))
+```
+The output of the confusion matrix shows that the accuracy of the model is 0.9972, which is much higher compared to the 0.7363 accuracy of the decision tree algorithm implemented earlier. This is to be expected since random forests are known to be more accurate despite having problems with lower speed and overfitting. Since the random forest model has an accuracy of 0.9972, this model will be used to predict the 20 test cases.
+
+## Applying to Test Data
+The random forest model was applied to the testing data and the output is shown in the results.
+```{r, echo=TRUE}
+prediction_testing <- predict(randomforest, newdata=testing)
+prediction_testing
+```
